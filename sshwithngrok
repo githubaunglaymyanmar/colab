@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Install necessary packages
+echo "Installing ngrok and openssh-server..."
+apt-get update > /dev/null 2>&1
+apt-get install -qq -y openssh-server > /dev/null 2>&1
+pip install -q pyngrok
+
+# Generate SSH host keys
+ssh-keygen -A > /dev/null 2>&1
+
+# Configure SSH
+mkdir -p ~/.ssh
+
+# Generate random root password
+#echo "Setting a password for the root user..."
+#password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 15)
+#echo "root:$password" | chpasswd
+
+apt install sshpass screen -y &> /dev/null 
+useradd -m aunglay &> /dev/null 
+adduser aunglay sudo &> /dev/null 
+echo 'aunglay:aunglay' | sudo chpasswd &> /dev/null 
+sed -i 's/\/bin\/sh/\/bin\/bash/g' /etc/passwd &> /dev/null 
+echo "aunglay ALL=(ALL:ALL) NOPASSWD:ALL" >> /etc/sudoers
+printf "aunglay\naunglay" | passwd root &> /dev/null
+
+
+               
+# Allow root login via SSH with password
+echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+# Restart SSH service
+echo "Restarting SSH service..."
+service ssh restart > /dev/null 2>&1
+
+echo "SSH service started."
+echo "Your root password for SSH is: $password"
+echo "Please copy this password now, it will not be shown again."
+
+# Setup ngrok
+echo -e "\n--- ngrok Setup ---"
+echo "Please ensure you have set your ngrok auth token."
+
+# IMPORTANT: Replace with your actual ngrok authtoken
+ngrok authtoken "26eYD2rzqgCmGkW89AA3yLLWU6y_ZyWP1LVkjawmTLisTGcw"
+
+# Start ngrok tunnel
+ssh_tunnel=$(ngrok tcp 22 --log=stdout | grep -oE "tcp://[0-9a-zA-Z.:]+" | head -n1)
+
+if [ -n "$ssh_tunnel" ]; then
+    echo "ngrok tunnel established: $ssh_tunnel"
+    hostport=${ssh_tunnel#tcp://}
+    host=$(echo $hostport | cut -d: -f1)
+    port=$(echo $hostport | cut -d: -f2)
+    echo "To connect via SSH, use:"
+    echo "ssh root@$host -p $port"
+    echo "Password: $password"
+else
+    echo "Error setting up ngrok tunnel."
+    echo "Ensure your ngrok authentication token is set correctly."
+fi
